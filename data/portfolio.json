@@ -10,8 +10,8 @@
       "color": "#f59e0b",
       "amount": 0.0,
       "cost_basis_usd": 0.0,
-      "last_price": 0.00351479,
-      "last_price_updated_at": "2026-11-08T23:55:06Z",
+      "last_price": 0.00358965,
+      "last_price_updated_at": "2026-11-09T04:02:37Z",
       "recommended_by": "zAI"
     },
     "cashcat": {
@@ -22,8 +22,8 @@
       "color": "#3b82f6",
       "amount": 0.0,
       "cost_basis_usd": 0.0,
-      "last_price": 0.072417,
-      "last_price_updated_at": "2026-11-08T23:55:06Z",
+      "last_price": 0.073073,
+      "last_price_updated_at": "2026-11-09T04:02:37Z",
       "recommended_by": "zAI"
     },
     "fox": {
@@ -34,8 +34,8 @@
       "color": "#10b981",
       "amount": 0.0,
       "cost_basis_usd": 0.0,
-      "last_price": 0.00015898,
-      "last_price_updated_at": "2026-11-08T23:55:06Z",
+      "last_price": 0.00015581,
+      "last_price_updated_at": "2026-11-09T04:02:37Z",
       "recommended_by": "zAI"
     },
     "pump": {
@@ -46,8 +46,8 @@
       "color": "#8b5cf6",
       "amount": 0.0,
       "cost_basis_usd": 0.0,
-      "last_price": 0.0035426,
-      "last_price_updated_at": "2026-11-08T23:55:06Z",
+      "last_price": 0.00361197,
+      "last_price_updated_at": "2026-11-09T04:02:37Z",
       "recommended_by": "zAI"
     },
     "lista": {
@@ -59,8 +59,8 @@
       "recommended_by": "gAi",
       "amount": 21.10532825,
       "cost_basis_usd": 1.0,
-      "last_price": 0.071218,
-      "last_price_updated_at": "2026-11-08T23:55:06Z"
+      "last_price": 0.071978,
+      "last_price_updated_at": "2026-11-09T04:02:37Z"
     },
     "xvs": {
       "token_id": "xvs",
@@ -71,9 +71,9 @@
       "recommended_by": "gAi",
       "amount": 0.34013605,
       "cost_basis_usd": 1.0,
-      "last_price": 2.7,
-      "last_price_updated_at": "2026-11-08T23:55:06Z"
+      "last_price": 2.74,
+      "last_price_updated_at": "2026-11-09T04:02:37Z"
     }
   },
-  "last_updated_at": "2026-11-08T23:55:06Z"
+  "last_updated_at": "2026-11-09T04:02:37Z"
 }
