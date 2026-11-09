@@ -4,7 +4,8 @@ Automated trading rules engine.
 Rules are defined in data/rules.json. Each rule has:
   - id:           unique identifier
   - enabled:      bool
-  - token_id:     which token to apply to (or "all")
+  - token_id:     which token to apply to (or "all": all of the creator AI's own
+                  picks, or every token if created_by is "human"/"system")
   - type:         "take_profit" | "stop_loss" | "trailing_stop" | "rebalance"
   - threshold:    the trigger value (e.g. 50 for 50% gain on take_profit)
   - action:       what to do when triggered (e.g. "sell_50pct")
@@ -53,6 +54,7 @@ from utils import read_json, write_json, now_iso
 from portfolio import load_portfolio, record_trade, compute_summary
 from fetch_prices import fetch_all_token_prices
 from activity_log import log_event
+from risk import evaluate_risk_stops
 
 RULES_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "rules.json")
 
@@ -138,6 +140,27 @@ def _pct_to_sell(action: str) -> float:
     return 0.0
 
 
+# Rules created by these actors with token_id "all" apply to every holding.
+# Rules created by an AI (zAI, gAi, ...) with token_id "all" apply only to that
+# AI's own picks, so one AI's rules never trade another AI's basket.
+GLOBAL_RULE_ACTORS = {"human", "system"}
+
+
+def _rule_applies_to(rule: dict, h: dict) -> bool:
+    if rule["token_id"] != "all":
+        return h["token_id"] == rule["token_id"]
+    owner = rule.get("created_by", "system")
+    if owner in GLOBAL_RULE_ACTORS:
+        return True
+    return h.get("recommended_by") == owner
+
+
+def _position_key(h: dict) -> str:
+    """Identifies the current position in a token. Changes when a closed
+    position is re-opened, so rules can fire again on the new position."""
+    return h.get("position_opened_at") or "initial"
+
+
 def evaluate_rules(prices_by_token: dict = None) -> list:
     """
     Check all enabled rules against current portfolio state.
@@ -148,23 +171,29 @@ def evaluate_rules(prices_by_token: dict = None) -> list:
     rules = load_rules()
     enabled_rules = [r for r in rules if r.get("enabled", True)]
     if not enabled_rules:
-        return []
+        return evaluate_risk_stops()
 
     if prices_by_token is None:
         prices_by_token = fetch_all_token_prices()
 
-    summary = compute_summary()
     triggered = []
+    rules_changed = False
 
     for rule in enabled_rules:
-        # Find tokens this rule applies to
-        if rule["token_id"] == "all":
-            applicable = summary["holdings"]
-        else:
-            applicable = [h for h in summary["holdings"] if h["token_id"] == rule["token_id"]]
+        # Recompute holdings for every rule: an earlier rule in this same run
+        # may already have sold part of a position. (Previously one stale
+        # snapshot was shared, so two "sell 50%" rules sold 100%.)
+        summary = compute_summary()
+        applicable = [h for h in summary["holdings"] if _rule_applies_to(rule, h)]
 
         for h in applicable:
             if h["amount"] <= 0 or h["cost_basis_usd"] <= 0:
+                continue
+            # Fire at most once per position. After a proportional partial sell
+            # the P&L % is unchanged, so without this the same take-profit
+            # re-fired on every run until the position was gone.
+            position_key = _position_key(h)
+            if rule.get("fired", {}).get(h["token_id"]) == position_key:
                 continue
             pnl_pct = h["pnl_pct"]
             threshold = rule["threshold"]
@@ -212,6 +241,8 @@ def evaluate_rules(prices_by_token: dict = None) -> list:
                                   f"Rule '{rule['id']}' triggered: {rule_type} on {h['ticker']} at {pnl_pct:+.2f}% P&L → {action}",
                                   event_data)
                         triggered.append(event_data)
+                        rule.setdefault("fired", {})[h["token_id"]] = position_key
+                        rules_changed = True
                     except Exception as e:
                         log_event("system", "rule_error",
                                   f"Failed to execute rule '{rule['id']}' on {h['ticker']}: {e}",
@@ -231,7 +262,15 @@ def evaluate_rules(prices_by_token: dict = None) -> list:
                           f"Alert: rule '{rule['id']}' triggered ({rule_type} on {h['ticker']} at {pnl_pct:+.2f}%)",
                           event_data)
                 triggered.append(event_data)
+                rule.setdefault("fired", {})[h["token_id"]] = position_key
+                rules_changed = True
 
+    if rules_changed:
+        # enabled_rules holds the same dicts as rules, so the "fired" marks persist.
+        save_rules(rules)
+
+    # Stop-loss / re-entry rules for hand-picked tokens (data/risk.json)
+    triggered.extend(evaluate_risk_stops())
     return triggered
 
 

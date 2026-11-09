@@ -140,20 +140,6 @@
     "note": "Auto: rule 'tp-zai-basket-2x' triggered (take_profit @ +107.63% \u2192 sell_50pct)"
   },
   {
-    "id": "73f7102d-3f41-43ab-bf5a-385815b59e02",
-    "ts": "2026-08-19T01:39:14Z",
-    "epoch": 1787103554,
-    "action": "SELL",
-    "token_id": "fox",
-    "ticker": "FOX",
-    "chain": "Robinhood",
-    "recommended_by": "zAI",
-    "amount": 545.902346925,
-    "price_usd": 0.0020919,
-    "value_usd": 1.141973,
-    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +107.63% \u2192 sell_50pct)"
-  },
-  {
     "id": "5beae29f-1ce7-48fd-aec6-777cb98a1196",
     "ts": "2026-08-20T19:00:05Z",
     "epoch": 1787252405,
@@ -166,20 +152,6 @@
     "price_usd": 0.00376094,
     "value_usd": 1.002436,
     "note": "Auto: rule 'tp-zai-basket-2x' triggered (take_profit @ +100.49% \u2192 sell_50pct)"
-  },
-  {
-    "id": "57bb1274-b5a7-4735-98de-0fd3c23da5e7",
-    "ts": "2026-08-20T19:00:05Z",
-    "epoch": 1787252405,
-    "action": "SELL",
-    "token_id": "pump",
-    "ticker": "PUMP",
-    "chain": "Solana",
-    "recommended_by": "zAI",
-    "amount": 266.538728075,
-    "price_usd": 0.00376094,
-    "value_usd": 1.002436,
-    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +100.49% \u2192 sell_50pct)"
   },
   {
     "id": "20fc675f-7110-424f-8662-1d65cb559a93",
@@ -196,20 +168,6 @@
     "note": "Auto: rule 'tp-zai-basket-2x' triggered (take_profit @ +101.21% \u2192 sell_50pct)"
   },
   {
-    "id": "0b4db559-d51f-4bc2-a93c-30d64fc31633",
-    "ts": "2026-08-20T22:30:56Z",
-    "epoch": 1787265056,
-    "action": "SELL",
-    "token_id": "pump",
-    "ticker": "PUMP",
-    "chain": "Solana",
-    "recommended_by": "zAI",
-    "amount": 133.269364035,
-    "price_usd": 0.0037745,
-    "value_usd": 0.503025,
-    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +101.21% \u2192 sell_50pct)"
-  },
-  {
     "id": "0185dffc-9b5a-4429-8966-824021f37b9b",
     "ts": "2026-08-20T22:56:33Z",
     "epoch": 1787266593,
@@ -222,20 +180,6 @@
     "price_usd": 0.00376573,
     "value_usd": 0.250928,
     "note": "Auto: rule 'tp-zai-basket-2x' triggered (take_profit @ +100.74% \u2192 sell_50pct)"
-  },
-  {
-    "id": "7fd35702-697e-476e-9900-9e7b78fa1ce0",
-    "ts": "2026-08-20T22:56:33Z",
-    "epoch": 1787266593,
-    "action": "SELL",
-    "token_id": "pump",
-    "ticker": "PUMP",
-    "chain": "Solana",
-    "recommended_by": "zAI",
-    "amount": 66.634682015,
-    "price_usd": 0.00376573,
-    "value_usd": 0.250928,
-    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +100.74% \u2192 sell_50pct)"
   },
   {
     "id": "6775553c-4c7d-4bb2-a5e6-c0bdfbc2e0dd",
@@ -306,20 +250,6 @@
     "price_usd": 0.03195798,
     "value_usd": 1.024059,
     "note": "Auto: rule 'tp-zai-basket-2x' triggered (take_profit @ +104.81% \u2192 sell_50pct)"
-  },
-  {
-    "id": "514a331e-e67f-4cd2-a9c7-3d6a4d22bb9e",
-    "ts": "2026-09-02T18:30:06Z",
-    "epoch": 1788373806,
-    "action": "SELL",
-    "token_id": "tendies",
-    "ticker": "TENDIES",
-    "chain": "Robinhood",
-    "recommended_by": "zAI",
-    "amount": 32.043907845,
-    "price_usd": 0.03195798,
-    "value_usd": 1.024059,
-    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +104.81% \u2192 sell_50pct)"
   },
   {
     "id": "9ab44365-daa3-46a7-ab4d-a2b630b7a8b4",

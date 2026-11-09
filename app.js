@@ -23,11 +23,25 @@ const FILES = {
   activityLog:   `${DATA_BASE}/activity_log.json`,
   rules:         `${DATA_BASE}/rules.json`,
   health:        `${DATA_BASE}/health.json`,
+  customTokens:  `${DATA_BASE}/custom_tokens.json`,
+  risk:          `${DATA_BASE}/risk.json`,
 };
 
+// Random-entry baseline from scripts/backtest.py (stop -15 + trailing 30,
+// costs 2.5%/side + 0.05$/tx): average P&L per trade on PumpSwap, 6h horizon.
+const RANDOM_BASELINE_PCT = -3.6;
+const MIN_TRADES_FOR_VERDICT = 30;
+
 const COINGECKO_MARKETS = "https://api.coingecko.com/api/v3/coins/markets";
+const GECKOTERMINAL_MULTI = "https://api.geckoterminal.com/api/v2/networks/{network}/tokens/multi/{addresses}";
 const GITHUB_API = "https://api.github.com";
-const REPO_NAME = "SonaMother/crypto-paper-trader";
+// owner/repo of the copy serving this page (https://<owner>.github.io/<repo>/),
+// so forks trigger and link their own repository.
+const REPO_NAME = (() => {
+  const owner = (window.location.hostname.match(/^([A-Za-z0-9-]+)\.github\.io$/) || [])[1];
+  const repo = window.location.pathname.split("/").filter(Boolean)[0];
+  return owner && repo && /^[A-Za-z0-9._-]+$/.test(repo) ? `${owner}/${repo}` : "SonaMother/crypto-paper-trader";
+})();
 const WORKFLOW_FILENAME = "update.yml";
 
 const REFRESH_INTERVAL_SECONDS = 60; // live price refresh interval
@@ -43,6 +57,7 @@ let cachedPriceHistory = [];
 let cachedActivityLog = [];
 let cachedRules = [];
 let cachedHealth = null;
+let cachedRisk = null;
 
 // Latest live prices (from CoinGecko, fetched every 60s)
 let livePrices = {};  // { token_id: { price, change_24h, market_cap, volume_24h } }
@@ -118,7 +133,7 @@ function pnlBgClass(pnl) {
 }
 
 function aiPillClass(ai) {
-  return ai === "zAI" ? "pill-zai" : (ai === "gAi" ? "pill-gai" : "pill-neutral");
+  return ai === "zAI" ? "pill-zai" : (ai === "gAi" ? "pill-gai" : (ai === "human" ? "pill-human" : "pill-neutral"));
 }
 
 // ============================================================================
@@ -132,7 +147,7 @@ async function fetchJson(url, options = {}) {
   return resp.json();
 }
 
-async function fetchLivePrices() {
+async function fetchCoinGeckoPrices() {
   // Build a comma-separated list of CoinGecko coin IDs
   const tokens = window.TOKEN_CONFIG.tokens;
   const cgIdMap = window.TOKEN_CONFIG.coingeckoIds;
@@ -177,6 +192,88 @@ async function fetchLivePrices() {
   }
 }
 
+// Tokens tracked by contract address (data/custom_tokens.json) have no
+// CoinGecko id: price them via GeckoTerminal's multi-token endpoint
+// (CORS-enabled, up to 30 addresses per call).
+async function fetchGeckoTerminalPrices() {
+  const cgIdMap = window.TOKEN_CONFIG.coingeckoIds;
+  const networks = window.TOKEN_CONFIG.geckoterminalNetworks || {};
+  const byNetwork = {};
+  for (const t of window.TOKEN_CONFIG.tokens) {
+    if (cgIdMap[t.id] || !t.contract) continue;
+    const network = networks[t.chain];
+    if (!network) continue;
+    (byNetwork[network] = byNetwork[network] || []).push(t);
+  }
+
+  const out = {};
+  for (const [network, tokens] of Object.entries(byNetwork)) {
+    for (let i = 0; i < tokens.length; i += 30) {
+      const batch = tokens.slice(i, i + 30);
+      const url = GECKOTERMINAL_MULTI
+        .replace("{network}", network)
+        .replace("{addresses}", batch.map(t => t.contract).join(","));
+      try {
+        const resp = await fetch(url, { headers: { Accept: "application/json;version=20230302" } });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        for (const item of data.data || []) {
+          const attrs = item.attributes || {};
+          const token = batch.find(t => t.contract === attrs.address);
+          const price = parseFloat(attrs.price_usd);
+          if (!token || !(price > 0)) continue;
+          out[token.id] = {
+            price,
+            change_24h: 0,
+            market_cap: parseFloat(attrs.market_cap_usd || attrs.fdv_usd) || 0,
+            volume_24h: parseFloat((attrs.volume_usd || {}).h24) || 0,
+          };
+        }
+      } catch (err) {
+        console.warn(`[live] GeckoTerminal fetch failed (${network}):`, err.message);
+      }
+    }
+  }
+  return out;
+}
+
+async function fetchLivePrices() {
+  const [cg, gt] = await Promise.all([fetchCoinGeckoPrices(), fetchGeckoTerminalPrices()]);
+  if (Object.keys(cg).length === 0 && Object.keys(gt).length > 0) {
+    livePriceSource = "GeckoTerminal (live)";
+    livePriceSourceTime = new Date().toISOString();
+  }
+  return { ...cg, ...gt };
+}
+
+// Merge hand-picked tokens (added with `trade.py add-token <CA>`) into the
+// token list once at startup, so every view shows them like the AI picks.
+async function loadCustomTokens() {
+  try {
+    const custom = await fetchJson(FILES.customTokens);
+    if (!Array.isArray(custom)) return;
+    const known = new Set(window.TOKEN_CONFIG.tokens.map(t => t.id));
+    // Symbols/names come from token launchers and are rendered with innerHTML
+    // elsewhere: whitelist characters so nothing can inject HTML or script.
+    const clean = (s, n) => String(s || "").replace(/[^A-Za-z0-9 ._\-]/g, "").slice(0, n);
+    for (const t of custom) {
+      if (!t || !/^[a-z0-9][a-z0-9-]{0,39}$/.test(String(t.id)) || known.has(t.id)) continue;
+      window.TOKEN_CONFIG.tokens.push({
+        id: t.id,
+        ticker: clean(t.ticker, 12) || t.id.toUpperCase(),
+        name: clean(t.name, 40) || t.id,
+        chain: clean(t.chain, 20) || "Solana",
+        color: /^#[0-9a-fA-F]{6}$/.test(t.color) ? t.color : "#f97316",
+        recommended_by: "human",
+        contract: /^([1-9A-HJ-NP-Za-km-z]{32,44}|0x[0-9a-fA-F]{40})$/.test(t.contract) ? t.contract : null,
+      });
+      known.add(t.id);
+    }
+  } catch (err) {
+    // No custom tokens file yet: nothing to merge.
+  }
+}
+
 // ============================================================================
 // Computation
 // ============================================================================
@@ -205,12 +302,13 @@ function computeSummary(portfolio, livePrices) {
         recommended_by: recommendedBy,
         amount: 0,
         cost_basis_usd: 0,
-        last_price: null,
+        // Watched but not bought yet: still show the live price if we have it
+        last_price: (livePrice && livePrice.price) ? livePrice.price : null,
         current_value_usd: 0,
         pnl_usd: 0,
         pnl_pct: 0,
-        change_24h: null,
-        source: "—",
+        change_24h: livePrice ? livePrice.change_24h : null,
+        source: livePrice ? "live" : "—",
       });
       continue;
     }
@@ -245,6 +343,17 @@ function computeSummary(portfolio, livePrices) {
     });
   }
 
+  // Money in / money out per token from the trade history.
+  // P&L = value still held + proceeds already cashed out - everything bought.
+  // (The old formula, value - open cost basis, ignored realized gains and
+  // counted cash as profit.)
+  const flows = {};
+  for (const t of cachedTrades || []) {
+    const f = flows[t.token_id] || (flows[t.token_id] = { bought: 0, sold: 0 });
+    if (t.action === "BUY") f.bought += t.value_usd || 0;
+    else f.sold += t.value_usd || 0;
+  }
+
   // Per-AI grouping
   const perAi = {};
   for (const h of holdings) {
@@ -254,31 +363,42 @@ function computeSummary(portfolio, livePrices) {
         ai,
         num_tokens: 0,
         cost_basis_usd: 0,
+        invested_usd: 0,
+        proceeds_usd: 0,
         current_value_usd: 0,
         pnl_usd: 0,
         pnl_pct: 0,
         tokens: [],
       };
     }
+    const f = flows[h.token_id] || { bought: 0, sold: 0 };
     perAi[ai].num_tokens += 1;
     perAi[ai].cost_basis_usd += h.cost_basis_usd;
+    perAi[ai].invested_usd += f.bought;
+    perAi[ai].proceeds_usd += f.sold;
     perAi[ai].current_value_usd += h.current_value_usd;
     perAi[ai].tokens.push({ ticker: h.ticker, pnl_pct: h.pnl_pct, color: h.color });
   }
-  const perAiArr = Object.values(perAi).map(s => ({
-    ...s,
-    pnl_usd: s.current_value_usd - s.cost_basis_usd,
-    pnl_pct: s.cost_basis_usd > 0 ? ((s.current_value_usd - s.cost_basis_usd) / s.cost_basis_usd) * 100 : 0,
-  }));
+  const perAiArr = Object.values(perAi).map(s => {
+    const pnl = s.current_value_usd + s.proceeds_usd - s.invested_usd;
+    return { ...s, pnl_usd: pnl, pnl_pct: s.invested_usd > 0 ? (pnl / s.invested_usd) * 100 : 0 };
+  });
+
+  const totalInvested = Object.values(flows).reduce((a, f) => a + f.bought, 0);
+  const totalProceeds = Object.values(flows).reduce((a, f) => a + f.sold, 0);
+  const holdingsValue = totalValue - (portfolio.cash_usd || 0);
+  const totalPnl = holdingsValue + totalProceeds - totalInvested;
 
   return {
     created_at: portfolio.created_at,
     last_updated_at: portfolio.last_updated_at,
     cash_usd: portfolio.cash_usd || 0,
     total_cost_usd: totalCost,
+    total_invested_usd: totalInvested,
+    total_proceeds_usd: totalProceeds,
     total_value_usd: totalValue,
-    total_pnl_usd: totalValue - totalCost,
-    total_pnl_pct: totalCost > 0 ? ((totalValue - totalCost) / totalCost) * 100 : 0,
+    total_pnl_usd: totalPnl,
+    total_pnl_pct: totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0,
     holdings,
     per_ai: perAiArr,
   };
@@ -290,7 +410,7 @@ function computeSummary(portfolio, livePrices) {
 
 function renderHero(portfolio, summary) {
   document.getElementById("hero-value").textContent = fmtUsd(summary.total_value_usd);
-  document.getElementById("hero-cost").textContent = fmtUsd(summary.total_cost_usd);
+  document.getElementById("hero-cost").textContent = fmtUsd(summary.total_invested_usd);
   document.getElementById("hero-cash").textContent = fmtUsd(summary.cash_usd);
   document.getElementById("hero-updated").textContent = livePriceSourceTime ? fmtRelative(livePriceSourceTime) : fmtRelative(portfolio.last_updated_at);
   document.getElementById("hero-source").textContent = livePriceSource;
@@ -360,16 +480,16 @@ function renderAiBreakdown(summary) {
         <div class="ai-breakdown-pnl ${pnlClass(ai.pnl_usd)}">${fmtUsd(ai.pnl_usd)} <span style="font-size: 13px; font-weight: 500;">(${fmtPct(ai.pnl_pct)})</span></div>
         <div class="ai-breakdown-stats">
           <div>
-            <div class="ai-breakdown-stat-label">Cost</div>
-            <div class="ai-breakdown-stat-value">${fmtUsd(ai.cost_basis_usd)}</div>
+            <div class="ai-breakdown-stat-label">Invested</div>
+            <div class="ai-breakdown-stat-value">${fmtUsd(ai.invested_usd)}</div>
           </div>
           <div>
-            <div class="ai-breakdown-stat-label">Value</div>
+            <div class="ai-breakdown-stat-label">Value held</div>
             <div class="ai-breakdown-stat-value">${fmtUsd(ai.current_value_usd)}</div>
           </div>
           <div>
-            <div class="ai-breakdown-stat-label">P&amp;L</div>
-            <div class="ai-breakdown-stat-value ${pnlClass(ai.pnl_usd)}">${fmtUsd(ai.pnl_usd)}</div>
+            <div class="ai-breakdown-stat-label">Cashed out</div>
+            <div class="ai-breakdown-stat-value">${fmtUsd(ai.proceeds_usd)}</div>
           </div>
         </div>
         <div class="ai-breakdown-tokens">${tokenChips}</div>
@@ -573,6 +693,119 @@ function renderChart(priceHistory) {
 }
 
 // ============================================================================
+// My trades (hand-picked tokens governed by data/risk.json)
+// ============================================================================
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderMyTrades(portfolio, trades, risk, live) {
+  const section = document.getElementById("my-trades-section");
+  if (!section) return;
+  if (!risk || !portfolio) { section.style.display = "none"; return; }
+  section.style.display = "";
+
+  const applies = risk.applies_to || ["human"];
+  const tokens = window.TOKEN_CONFIG.tokens.filter(t => applies.includes(t.recommended_by));
+  const ids = new Set(tokens.map(t => t.id));
+  const trail = risk.trailing_stop_pct;
+
+  document.getElementById("my-rules").textContent =
+    `Stop ${risk.stop_loss_pct}% · trailing ${trail ? trail + "% from peak" : "off"} · ` +
+    `position ${risk.max_position_usd}$ (${risk.max_position_exceptional_usd}$ exceptional) · ` +
+    `capital ${risk.max_capital_usd}$ · daily loss ${risk.max_daily_loss_usd}$. ` +
+    `Trade from GitHub: Actions → Paper trade → Run workflow. Paper money only.`;
+
+  // Realized P&L today, in the rules' timezone
+  let dayFmt;
+  try { dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: risk.timezone || "Europe/Brussels" }); }
+  catch (e) { dayFmt = new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }); }
+  const today = dayFmt.format(new Date());
+  let realizedToday = 0;
+  for (const t of trades || []) {
+    if (t.action === "SELL" && ids.has(t.token_id) && typeof t.realized_pnl_usd === "number"
+        && dayFmt.format(new Date(t.ts)) === today) realizedToday += t.realized_pnl_usd;
+  }
+  const blocked = realizedToday <= -risk.max_daily_loss_usd;
+  const todayEl = document.getElementById("my-today");
+  todayEl.textContent = fmtUsd(realizedToday);
+  todayEl.className = `status-value ${pnlClass(realizedToday)}`;
+  document.getElementById("my-today-detail").textContent =
+    blocked ? "Daily loss limit hit: buys blocked until tomorrow" : `limit −${risk.max_daily_loss_usd}$`;
+
+  // Rebuild closed positions from the trade history (first buy -> fully sold)
+  const openPos = {}, closed = [];
+  for (const t of trades || []) {
+    if (!ids.has(t.token_id)) continue;
+    let p = openPos[t.token_id];
+    if (t.action === "BUY") {
+      if (!p) p = openPos[t.token_id] = { invested: 0, proceeds: 0, qty: 0, max: 0 };
+      p.invested += t.value_usd; p.qty += t.amount; p.max = Math.max(p.max, p.qty);
+    } else if (p) {
+      p.proceeds += t.value_usd; p.qty -= t.amount;
+      if (p.qty <= p.max * 1e-9) { closed.push((p.proceeds - p.invested) / p.invested * 100); delete openPos[t.token_id]; }
+    }
+  }
+  const n = closed.length;
+  const mean = n ? closed.reduce((a, b) => a + b, 0) / n : null;
+  const wins = closed.filter(x => x > 0).length;
+  document.getElementById("my-closed").textContent = String(n);
+  document.getElementById("my-closed-detail").textContent = n ? `${Math.round(wins / n * 100)}% winners` : "no closed trade yet";
+  const avgEl = document.getElementById("my-avg");
+  avgEl.textContent = mean === null ? "—" : fmtPct(mean);
+  avgEl.className = `status-value ${mean === null ? "" : pnlClass(mean)}`;
+
+  const verdict = document.getElementById("my-verdict");
+  if (n < MIN_TRADES_FOR_VERDICT) {
+    verdict.textContent = `${n}/${MIN_TRADES_FOR_VERDICT} trades — too early to judge`;
+    verdict.className = "pill pill-neutral";
+  } else if (mean > Math.max(RANDOM_BASELINE_PCT, 0)) {
+    verdict.textContent = "Beating random entries (see trade.py journal)";
+    verdict.className = "pill pill-up";
+  } else {
+    verdict.textContent = "No edge vs random entries";
+    verdict.className = "pill pill-down";
+  }
+
+  // Open positions with their stop / trailing levels
+  let deployed = 0;
+  const rows = [];
+  for (const t of tokens) {
+    const h = portfolio.holdings[t.id];
+    if (!h || !(h.amount > 0)) continue;
+    const price = (live && live[t.id] && live[t.id].price) || h.last_price || 0;
+    const cost = h.cost_basis_usd || 0;
+    deployed += cost;
+    const value = h.amount * price;
+    const pnlPct = cost > 0 ? (value - cost) / cost * 100 : 0;
+    const entry = cost / h.amount;
+    const holdBE = h.is_reentry && risk.hold_reentry_until_breakeven;
+    const stopAt = holdBE ? null : entry * (1 + risk.stop_loss_pct / 100);
+    const peak = Math.max(h.peak_price || 0, price);
+    const trailAt = trail && !holdBE ? peak * (1 - trail / 100) : null;
+    const state = holdBE ? "re-entry: hold to break-even" : (h.is_reentry ? "re-entry, stop active" : "open, stop active");
+    const reds = h.safety_reds || [];
+    const safety = reds.length ? `⚠ ${reds.length} red flag(s)` : (h.safety_checked_at ? `✓ checked ${fmtRelative(h.safety_checked_at)}` : "—");
+    rows.push(`
+      <tr>
+        <td><span class="dot" style="background:${/^#[0-9a-fA-F]{6}$/.test(t.color) ? t.color : "#f97316"}"></span> ${escapeHtml(t.ticker)}</td>
+        <td class="text-right">${fmtUsd(cost)}</td>
+        <td class="text-right">${fmtUsd(value)}</td>
+        <td class="text-right ${pnlClass(pnlPct)}">${fmtPct(pnlPct)}</td>
+        <td class="text-right">${stopAt ? fmtPrice(stopAt) : "—"}</td>
+        <td class="text-right">${trailAt ? fmtPrice(trailAt) : "—"}</td>
+        <td>${escapeHtml(state)}</td>
+        <td class="${reds.length ? "text-down" : ""}">${escapeHtml(safety)}</td>
+      </tr>`);
+  }
+  document.getElementById("my-deployed").textContent = fmtUsd(deployed);
+  document.getElementById("my-deployed-detail").textContent = `of ${fmtUsd(risk.max_capital_usd)} max`;
+  document.getElementById("my-positions").innerHTML = rows.length ? rows.join("") :
+    `<tr><td colspan="8" class="table-empty">No open position. Add a token: Actions → Paper trade → add-token.</td></tr>`;
+}
+
+// ============================================================================
 // Main refresh
 // ============================================================================
 
@@ -582,15 +815,17 @@ async function refreshAll() {
 
   try {
     // Fetch server-side data + live prices in parallel
-    const [portfolio, trades, priceHistory, activityLog, rules, health, live] = await Promise.all([
+    const [portfolio, trades, priceHistory, activityLog, rules, health, risk, live] = await Promise.all([
       fetchJson(FILES.portfolio),
       fetchJson(FILES.trades),
       fetchJson(FILES.priceHistory),
       fetchJson(FILES.activityLog).catch(() => []),
       fetchJson(FILES.rules).catch(() => []),
       fetchJson(FILES.health).catch(() => null),
+      fetchJson(FILES.risk).catch(() => null),
       fetchLivePrices(),
     ]);
+    cachedRisk = risk;
 
     cachedPortfolio = portfolio;
     cachedTrades = trades;
@@ -610,6 +845,7 @@ async function refreshAll() {
     renderSystemStatus(activityLog, rules, health);
     renderActivityLog(activityLog);
     renderRulesList(rules);
+    renderMyTrades(portfolio, trades, risk, live);
 
     countdownSeconds = REFRESH_INTERVAL_SECONDS;
   } catch (err) {
@@ -635,6 +871,7 @@ async function refreshLiveOnly() {
     renderAiBreakdown(summary);
     renderHoldings(summary);
     renderChart(cachedPriceHistory);
+    renderMyTrades(cachedPortfolio, cachedTrades, cachedRisk, live);
   } catch (err) {
     console.warn("[live] refresh failed:", err.message);
   }
@@ -825,7 +1062,7 @@ async function triggerCronRefresh() {
 // Init
 // ============================================================================
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("refresh-btn").addEventListener("click", refreshAll);
   document.getElementById("force-refresh-btn").addEventListener("click", triggerCronRefresh);
 
@@ -852,9 +1089,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const pathParts = window.location.pathname.split("/").filter(Boolean);
     if (pathParts.length >= 1) {
       const repo = pathParts[0];
-      repoLink.href = `https://github.com/SonaMother/${repo}`;
+      repoLink.href = `https://github.com/${REPO_NAME}`;
     }
   }
+  await loadCustomTokens();
   refreshAll();
   startCountdown();
 });

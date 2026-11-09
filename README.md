@@ -246,3 +246,61 @@ recommendations. It is not financial advice. The tokens tracked here are
 extremely risky (memecoins on a 3-week-old blockchain, micro-cap moonshots,
 volatile DeFi tokens) and most will probably lose value. The purpose is to
 learn and observe, not to make real money.
+
+## 🎯 Hand-picked Solana tokens, safety check & risk rules
+
+```bash
+# Anti-scam check (RugCheck + GeckoTerminal): authorities, tax, liquidity,
+# holder concentration, creator, insiders, LP lock, age. Not a buy signal.
+python scripts/trade.py check <CA>
+
+# Track a token by contract address (runs the check; refuses major red flags)
+python scripts/trade.py add-token <CA>
+
+# Paper buy / sell with the risk rules of data/risk.json enforced
+python scripts/trade.py buy <id> --usd 5            # --exceptional allows up to 8
+python scripts/trade.py sell <id> --pct 100
+python scripts/trade.py risk                        # daily P&L, capital, stops, re-entries
+python scripts/trade.py journal                     # your results vs random entries: do you have an edge?
+```
+
+Risk rules (`data/risk.json`, USD): capital max 50, daily realized loss max 10
+(Europe/Brussels day), position 5 (8 exceptional), stop -15%, trailing stop 30%
+from the peak, one re-entry after a stop (protected by the same stop).
+
+## 🧪 Backtesting exit rules
+
+```bash
+python scripts/backtest.py                                   # PumpSwap, 6h horizon
+python scripts/backtest.py --dex pump-fun --candle-minutes 5 --horizon-hours 2
+python scripts/backtest.py --ca <CA> --ca <CA>
+```
+
+Entries are taken at regular intervals (no picking skill), so only the exit
+rules differ. Costs: 2.5% per side + 0.05$ per transaction. Tokens are split in
+two halves: a rule that only wins on one half is noise. Results are optimistic
+(pools that died before the last 24h are missing), so compare variants with each
+other. Result in Nov 2026: every variant lost money at 2h–6h horizons; stop -15 +
+trailing 30% beat stop -15 alone in 2 of 3 datasets; holding a re-entry until
+break-even never did.
+
+Open hand-picked positions are re-checked for scams every 6h by the hourly
+update (`safety_recheck_hours`). A NEW major red flag (liquidity pulled, a wallet
+suddenly holding 40%...) is logged as a `safety_alert` in the dashboard activity
+log; set `"exit_on_new_red_flag": true` in `data/risk.json` to also sell.
+
+## 🖱 Trading from the browser (no Python needed)
+
+GitHub → **Actions** tab → **Paper trade** → **Run workflow**, then pick:
+
+| command | target | other fields |
+|---|---|---|
+| `check` | contract address | — |
+| `add-token` | contract address | `force` = track despite red flags |
+| `buy` | token id (e.g. `wif`) | `usd`, `exceptional` |
+| `sell` | token id | `pct`, `force` |
+| `risk`, `journal`, `status` | — | — |
+
+The output appears in the run's **Summary**. Trades are committed to `data/`
+and show up on the dashboard ("My trades — risk rules" panel). Inputs are
+validated by `scripts/run_action.py` and never pasted into a shell command.

@@ -104,4 +104,35 @@ AI_STYLES = {
         "label": "gAi",
         "description": "DeFi-focused: BNB chain lending protocols with real revenue",
     },
+    "human": {
+        "color": "#f97316",        # orange
+        "label": "human",
+        "description": "Hand-picked tokens added by contract address, governed by data/risk.json",
+    },
 }
+
+
+# ---------------------------------------------------------------------------
+# Custom tokens, added by contract address with:
+#     python scripts/trade.py add-token <CA>
+# They live in data/custom_tokens.json (not in this file) so the dashboard can
+# read them too. Custom tokens are priced via GeckoTerminal, are never bought
+# automatically by init_portfolio.py, and are governed by the risk rules in
+# data/risk.json (see scripts/risk.py).
+# ---------------------------------------------------------------------------
+
+def _load_custom_tokens() -> list:
+    from utils import read_json, CUSTOM_TOKENS_PATH
+    tokens = read_json(CUSTOM_TOKENS_PATH, [])
+    return tokens if isinstance(tokens, list) else []
+
+
+_builtin_ids = {t["id"] for t in TOKENS}
+for _t in _load_custom_tokens():
+    if not _t.get("id") or _t["id"] in _builtin_ids:
+        continue
+    _t.setdefault("coingecko_id", None)
+    _t.setdefault("recommended_by", "human")
+    _t["custom"] = True
+    TOKENS.append(_t)
+    _builtin_ids.add(_t["id"])

@@ -110,8 +110,36 @@ def record_trade(action: str, token_id: str, amount: float, price_usd: float,
     if price_usd <= 0:
         raise ValueError("price_usd must be > 0")
 
-    value_usd = amount * price_usd
     ts = ts or now_iso()
+
+    # Load the portfolio and validate BEFORE writing anything, so a rejected
+    # trade never lands in trades.json (previously a failed SELL still left a
+    # phantom entry in the trade history).
+    p = load_portfolio()
+    h = p["holdings"].setdefault(token_id, {
+        "token_id": token_id,
+        "ticker": token["ticker"],
+        "name": token["name"],
+        "chain": token["chain"],
+        "color": token["color"],
+        "recommended_by": token.get("recommended_by", "unknown"),
+        "amount": 0.0,
+        "cost_basis_usd": 0.0,
+        "last_price": None,
+        "last_price_updated_at": None,
+    })
+
+    if action == "SELL":
+        held = h["amount"]
+        if amount > held:
+            # Holdings are stored rounded to 8 decimals, so "sell everything"
+            # can exceed the stored balance by a hair. Clamp that to the balance.
+            if held > 0 and amount - held <= max(1e-8, held * 1e-9):
+                amount = held
+            else:
+                raise ValueError(f"Insufficient balance: have {held}, want to sell {amount}")
+
+    value_usd = amount * price_usd
 
     trade = {
         "id": str(uuid.uuid4()),
@@ -127,6 +155,11 @@ def record_trade(action: str, token_id: str, amount: float, price_usd: float,
         "value_usd": round(value_usd, 6),
         "note": note,
     }
+    if action == "SELL":
+        # Realized P&L of this sale = proceeds minus the share of cost basis sold.
+        # Used by scripts/risk.py for the daily loss limit.
+        cost_removed = h["cost_basis_usd"] * (amount / h["amount"]) if h["amount"] > 0 else 0.0
+        trade["realized_pnl_usd"] = round(value_usd - cost_removed, 6)
 
     # Append to trades.json
     trades = load_trades()
@@ -134,27 +167,22 @@ def record_trade(action: str, token_id: str, amount: float, price_usd: float,
     save_trades(trades)
 
     # Update portfolio
-    p = load_portfolio()
-    h = p["holdings"].setdefault(token_id, {
-        "token_id": token_id,
-        "ticker": token["ticker"],
-        "name": token["name"],
-        "chain": token["chain"],
-        "color": token["color"],
-        "recommended_by": token.get("recommended_by", "unknown"),
-        "amount": 0.0,
-        "cost_basis_usd": 0.0,
-        "last_price": None,
-        "last_price_updated_at": None,
-    })
-
     if action == "BUY":
+        if h["amount"] <= 0:
+            # Opening a fresh position: rules that already fired on the old
+            # (closed) position become eligible again.
+            h["position_opened_at"] = ts
+            h["entries"] = h.get("entries", 0) + 1
+            # A position opened after a stop-loss is the re-entry (see risk.py).
+            h["is_reentry"] = h.get("stops_hit", 0) > 0
+            if h["is_reentry"]:
+                h["reentry_used"] = True
+            h.pop("breakeven_alerted", None)
+            h.pop("peak_price", None)  # trailing stop restarts from the new entry
         h["amount"] = round(h["amount"] + amount, 8)
         h["cost_basis_usd"] = round(h["cost_basis_usd"] + value_usd, 6)
         p["cash_usd"] = round(p["cash_usd"] - value_usd, 6)
-    else:  # SELL
-        if h["amount"] < amount:
-            raise ValueError(f"Insufficient balance: have {h['amount']}, want to sell {amount}")
+    else:  # SELL (balance already validated above)
         # Reduce cost basis proportionally
         if h["amount"] > 0:
             ratio = amount / h["amount"]
@@ -245,7 +273,18 @@ def compute_summary() -> dict:
             "current_value_usd": value,
             "pnl_usd": pnl,
             "pnl_pct": pnl_pct,
+            "position_opened_at": h.get("position_opened_at"),
         })
+
+    # Money in / money out per token, from the trade history.
+    # P&L = value still held + proceeds already cashed out - everything bought.
+    # (The old formula, value - open cost basis, ignored realized gains and
+    # counted cash as profit.)
+    flows = trade_flows()
+    for h in per_token:
+        f = flows.get(h["token_id"], {"bought": 0.0, "sold": 0.0})
+        h["invested_usd"] = f["bought"]
+        h["proceeds_usd"] = f["sold"]
 
     # Per-AI grouping
     per_ai = {}
@@ -256,6 +295,8 @@ def compute_summary() -> dict:
                 "ai": ai,
                 "num_tokens": 0,
                 "cost_basis_usd": 0.0,
+                "invested_usd": 0.0,
+                "proceeds_usd": 0.0,
                 "current_value_usd": 0.0,
                 "pnl_usd": 0.0,
                 "pnl_pct": 0.0,
@@ -263,23 +304,41 @@ def compute_summary() -> dict:
             }
         per_ai[ai]["num_tokens"] += 1
         per_ai[ai]["cost_basis_usd"] += h["cost_basis_usd"]
+        per_ai[ai]["invested_usd"] += h["invested_usd"]
+        per_ai[ai]["proceeds_usd"] += h["proceeds_usd"]
         per_ai[ai]["current_value_usd"] += h["current_value_usd"]
         per_ai[ai]["tokens"].append(h["token_id"])
 
     for ai, stats in per_ai.items():
-        stats["cost_basis_usd"] = round(stats["cost_basis_usd"], 6)
-        stats["current_value_usd"] = round(stats["current_value_usd"], 6)
-        stats["pnl_usd"] = round(stats["current_value_usd"] - stats["cost_basis_usd"], 6)
-        stats["pnl_pct"] = (stats["pnl_usd"] / stats["cost_basis_usd"] * 100) if stats["cost_basis_usd"] > 0 else 0
+        for k in ("cost_basis_usd", "invested_usd", "proceeds_usd", "current_value_usd"):
+            stats[k] = round(stats[k], 6)
+        stats["pnl_usd"] = round(stats["current_value_usd"] + stats["proceeds_usd"] - stats["invested_usd"], 6)
+        stats["pnl_pct"] = (stats["pnl_usd"] / stats["invested_usd"] * 100) if stats["invested_usd"] > 0 else 0
+
+    total_invested = sum(f["bought"] for f in flows.values())
+    total_proceeds = sum(f["sold"] for f in flows.values())
+    holdings_value = total_value - p.get("cash_usd", 0)
+    total_pnl = holdings_value + total_proceeds - total_invested
 
     return {
         "created_at": p.get("created_at"),
         "last_updated_at": p.get("last_updated_at"),
         "cash_usd": p.get("cash_usd", 0),
-        "total_cost_usd": total_cost,
-        "total_value_usd": total_value,
-        "total_pnl_usd": total_value - total_cost,
-        "total_pnl_pct": ((total_value - total_cost) / total_cost * 100) if total_cost > 0 else 0,
+        "total_cost_usd": total_cost,              # cost basis of open positions
+        "total_invested_usd": total_invested,      # everything ever bought
+        "total_proceeds_usd": total_proceeds,      # everything ever sold
+        "total_value_usd": total_value,            # cash + open positions
+        "total_pnl_usd": total_pnl,
+        "total_pnl_pct": (total_pnl / total_invested * 100) if total_invested > 0 else 0,
         "holdings": per_token,
         "per_ai": list(per_ai.values()),
     }
+
+
+def trade_flows() -> dict:
+    """{token_id: {"bought": USD spent, "sold": USD received}} over all trades."""
+    flows = {}
+    for t in load_trades():
+        f = flows.setdefault(t["token_id"], {"bought": 0.0, "sold": 0.0})
+        f["bought" if t["action"] == "BUY" else "sold"] += t.get("value_usd", 0)
+    return flows

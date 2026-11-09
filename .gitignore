@@ -29,3 +29,6 @@ secrets.json
 
 # Logs
 *.log
+
+# Local backtest data (scripts/backtest.py)
+backtest_cache/

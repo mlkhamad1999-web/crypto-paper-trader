@@ -29,5 +29,12 @@ window.TOKEN_CONFIG = {
   aiStyles: {
     zAI: { color: "#8b5cf6", label: "zAI", description: "Memecoin-focused: Robinhood Chain + Solana pump.fun" },
     gAi: { color: "#06b6d4", label: "gAi", description: "DeFi-focused: BNB chain lending protocols with real revenue" },
+    human: { color: "#f97316", label: "human", description: "Hand-picked by contract address, governed by data/risk.json" },
+  },
+
+  // GeckoTerminal network slugs, for tokens tracked by contract address
+  // (data/custom_tokens.json, loaded by app.js at startup).
+  geckoterminalNetworks: {
+    Solana: "solana", Robinhood: "robinhood", BSC: "bsc", Base: "base", Ethereum: "eth", Arbitrum: "arbitrum",
   },
 };

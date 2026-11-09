@@ -52,7 +52,7 @@
             </div>
             <div class="hero-stats">
               <div class="hero-stat">
-                <span class="hero-stat-label">Cost basis</span>
+                <span class="hero-stat-label">Invested</span>
                 <span id="hero-cost" class="hero-stat-value">$0.00</span>
               </div>
               <div class="hero-stat">
@@ -119,6 +119,60 @@
             </button>
             <div id="force-refresh-result" class="status-detail"></div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Hand-picked tokens governed by data/risk.json -->
+    <section class="section" id="my-trades-section">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">My trades — risk rules</h2>
+            <p id="my-rules" class="card-subtitle">Tokens added by contract address. Paper money only.</p>
+          </div>
+          <span id="my-verdict" class="pill pill-neutral">—</span>
+        </div>
+        <div class="status-grid">
+          <div class="status-cell">
+            <div class="status-label">Capital deployed</div>
+            <div id="my-deployed" class="status-value">—</div>
+            <div id="my-deployed-detail" class="status-detail">—</div>
+          </div>
+          <div class="status-cell">
+            <div class="status-label">Realized today</div>
+            <div id="my-today" class="status-value">—</div>
+            <div id="my-today-detail" class="status-detail">—</div>
+          </div>
+          <div class="status-cell">
+            <div class="status-label">Closed trades</div>
+            <div id="my-closed" class="status-value">—</div>
+            <div id="my-closed-detail" class="status-detail">—</div>
+          </div>
+          <div class="status-cell">
+            <div class="status-label">Avg P&amp;L / trade</div>
+            <div id="my-avg" class="status-value">—</div>
+            <div id="my-avg-detail" class="status-detail">vs random entries: −3.6% (PumpSwap 6h)</div>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th class="text-right">Cost</th>
+                <th class="text-right">Value</th>
+                <th class="text-right">P&amp;L</th>
+                <th class="text-right">Stop at</th>
+                <th class="text-right">Trailing at</th>
+                <th>State</th>
+                <th>Safety</th>
+              </tr>
+            </thead>
+            <tbody id="my-positions">
+              <tr><td colspan="8" class="table-empty">Loading…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>

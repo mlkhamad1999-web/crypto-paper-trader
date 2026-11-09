@@ -229,6 +229,12 @@ a {
   border: 1px solid rgba(6, 182, 212, 0.3);
 }
 
+.pill-human {
+  background: rgba(249, 115, 22, 0.12);
+  color: #fb923c;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
 .dot {
   display: inline-block;
   width: 6px;

@@ -1,0 +1,101 @@
+name: Paper trade
+
+# Run trade.py from the browser: Actions tab → "Paper trade" → "Run workflow".
+# The result is shown in the run's Summary. Paper money only.
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Action"
+        required: true
+        type: choice
+        options: [check, add-token, buy, sell, risk, journal, status]
+      target:
+        description: "Contract address (check, add-token) or token id like wif (buy, sell)"
+        required: false
+        type: string
+      usd:
+        description: "buy: amount in USD (e.g. 5)"
+        required: false
+        type: string
+        default: "5"
+      pct:
+        description: "sell: % of the position"
+        required: false
+        type: string
+        default: "100"
+      exceptional:
+        description: "buy: exceptional setup (allows up to 8 USD)"
+        required: false
+        type: boolean
+        default: false
+      force:
+        description: "sell: override hold-until-break-even / add-token: track despite red flags"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: portfolio-update        # same group as update.yml: never two writers at once
+  cancel-in-progress: false
+
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run command
+        id: run
+        env:
+          CMD: ${{ inputs.command }}
+          TARGET: ${{ inputs.target }}
+          USD: ${{ inputs.usd }}
+          PCT: ${{ inputs.pct }}
+          EXCEPTIONAL: ${{ inputs.exceptional }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -o pipefail
+          python scripts/run_action.py 2>&1 | tee out.txt
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Paper trade"
+            echo '```'
+            cat out.txt 2>/dev/null || echo "(no output)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit trade
+        if: success() && (inputs.command == 'add-token' || inputs.command == 'buy' || inputs.command == 'sell')
+        env:
+          CMD: ${{ inputs.command }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "paper($CMD): $TARGET"
+          for i in 1 2 3; do
+            git pull --rebase && git push && exit 0
+            sleep 5
+          done
+          echo "::error::Could not push the trade after 3 attempts"
+          exit 1

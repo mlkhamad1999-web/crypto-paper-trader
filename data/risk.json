@@ -1,0 +1,18 @@
+{
+  "_doc": "Risk rules for hand-picked tokens (see scripts/risk.py). Amounts are USD.",
+  "_backtest": "scripts/backtest.py, Nov 2026: stop -15 + trailing 30 beat stop -15 alone in 2 of 3 datasets; hold-until-break-even re-entry beat it in none. To go back: trailing_stop_pct null, hold_reentry_until_breakeven true.",
+  "enabled": true,
+  "applies_to": ["human"],
+  "max_capital_usd": 50,
+  "max_daily_loss_usd": 10,
+  "max_position_usd": 5,
+  "max_position_exceptional_usd": 8,
+  "stop_loss_pct": -15,
+  "trailing_stop_pct": 30,
+  "allow_one_reentry_after_stop": true,
+  "hold_reentry_until_breakeven": false,
+  "reentry_hard_stop_pct": null,
+  "safety_recheck_hours": 6,
+  "exit_on_new_red_flag": false,
+  "timezone": "Europe/Brussels"
+}

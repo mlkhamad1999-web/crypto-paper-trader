@@ -12,6 +12,8 @@ DATA_DIR = os.path.join(PROJECT_ROOT, "data")
 PORTFOLIO_PATH = os.path.join(DATA_DIR, "portfolio.json")
 TRADES_PATH = os.path.join(DATA_DIR, "trades.json")
 PRICE_HISTORY_PATH = os.path.join(DATA_DIR, "price_history.json")
+CUSTOM_TOKENS_PATH = os.path.join(DATA_DIR, "custom_tokens.json")
+RISK_CONFIG_PATH = os.path.join(DATA_DIR, "risk.json")
 
 
 def now_iso() -> str:

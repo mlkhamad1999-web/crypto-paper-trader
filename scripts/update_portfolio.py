@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from fetch_prices import fetch_all_token_prices
 from portfolio import update_prices, compute_summary
 from rules_engine import evaluate_rules
+from risk import recheck_open_positions
 from activity_log import log_event
 from utils import fmt_usd, fmt_pct, now_iso, write_json
 from pathlib import Path
@@ -80,6 +81,14 @@ def main():
             print(f"    - {t['rule_id']}: {t['rule_type']} on {t['ticker']} at {t['pnl_pct_at_trigger']:+.2f}% → {t['action']}")
     else:
         print("  No rules triggered.")
+
+    print("\nSafety re-check of open hand-picked positions...")
+    alerts = recheck_open_positions()
+    for a in alerts:
+        print(f"  ! {a['ticker']}: new red flag(s): {'; '.join(a['new_red_flags'])}"
+              + ("  → SOLD" if a.get("sold") else ""))
+    if not alerts:
+        print("  No new red flags.")
 
     s = compute_summary()
     print("\nPortfolio summary:")

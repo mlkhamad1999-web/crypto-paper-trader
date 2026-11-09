@@ -116,6 +116,25 @@ def fetch_via_geckoterminal(token: dict) -> Optional[dict]:
         return None
 
 
+def fetch_geckoterminal_token_info(chain: str, address: str) -> dict:
+    """Look up a token by contract address (used when adding a custom token).
+    Returns {"name", "symbol", "price", "coingecko_coin_id"}; raises if not found."""
+    network = GECKOTERMINAL_NETWORKS.get(chain)
+    if not network:
+        raise ValueError(f"Unsupported chain '{chain}'. Known: {', '.join(GECKOTERMINAL_NETWORKS)}")
+    url = GECKOTERMINAL_TOKEN.format(network=network, address=address)
+    data = _http_get_json(url, extra_headers={"Accept": "application/json;version=20230302"})
+    attrs = (data.get("data") or {}).get("attributes") or {}
+    if not attrs.get("symbol"):
+        raise RuntimeError(f"Token {address} not found on GeckoTerminal ({network})")
+    return {
+        "name": attrs.get("name") or attrs["symbol"],
+        "symbol": attrs["symbol"],
+        "price": float(attrs.get("price_usd") or 0),
+        "coingecko_coin_id": attrs.get("coingecko_coin_id"),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
@@ -138,22 +157,61 @@ def fetch_all_token_prices() -> Dict[str, dict]:
         prices_by_cg_id = {}
 
     out = {}
+    missing = []
     for token in TOKENS:
-        tid = token["id"]
-        cg_id = token["coingecko_id"]
-        result = prices_by_cg_id.get(cg_id)
+        cg_id = token.get("coingecko_id")  # None for custom tokens -> GeckoTerminal
+        result = prices_by_cg_id.get(cg_id) if cg_id else None
+        if result and result.get("price", 0) > 0:
+            out[token["id"]] = result
+        else:
+            missing.append(token)
 
-        if not result or result.get("price", 0) == 0:
-            # Fallback to GeckoTerminal
-            print(f"[info] Falling back to GeckoTerminal for {token['ticker']}...")
+    # GeckoTerminal for the rest: one batched call per network (up to 30
+    # addresses) instead of one call per token, to stay under its rate limit.
+    if missing:
+        out.update(fetch_via_geckoterminal_multi(missing))
+    for token in missing:
+        if token["id"] not in out:
+            print(f"[info] Falling back to GeckoTerminal (single) for {token['ticker']}...")
             gt_result = fetch_via_geckoterminal(token)
             if gt_result and gt_result.get("price", 0) > 0:
-                out[tid] = gt_result
+                out[token["id"]] = gt_result
             else:
-                out[tid] = {"price": None, "change_24h": None, "market_cap": None, "volume_24h": None}
-        else:
-            out[tid] = result
+                out[token["id"]] = {"price": None, "change_24h": None, "market_cap": None, "volume_24h": None}
 
+    return out
+
+
+def fetch_via_geckoterminal_multi(tokens: list) -> Dict[str, dict]:
+    """Batch price lookup by contract address. Returns {token_id: price dict}."""
+    by_network = {}
+    for t in tokens:
+        network = GECKOTERMINAL_NETWORKS.get(t.get("chain"))
+        if network and t.get("contract"):
+            by_network.setdefault(network, []).append(t)
+    out = {}
+    for network, toks in by_network.items():
+        for i in range(0, len(toks), 30):
+            batch = toks[i:i + 30]
+            addrs = ",".join(t["contract"] for t in batch)
+            url = f"https://api.geckoterminal.com/api/v2/networks/{network}/tokens/multi/{addrs}"
+            try:
+                data = _http_get_json(url, extra_headers={"Accept": "application/json;version=20230302"})
+            except Exception as e:
+                print(f"[warn] GeckoTerminal multi fetch failed ({network}): {e}")
+                continue
+            by_addr = {t["contract"].lower(): t for t in batch}
+            for item in data.get("data") or []:
+                attrs = item.get("attributes") or {}
+                t = by_addr.get((attrs.get("address") or "").lower())
+                price = float(attrs.get("price_usd") or 0)
+                if t and price > 0:
+                    out[t["id"]] = {
+                        "price": price,
+                        "change_24h": 0.0,
+                        "market_cap": float(attrs.get("market_cap_usd") or attrs.get("fdv_usd") or 0),
+                        "volume_24h": float((attrs.get("volume_usd") or {}).get("h24") or 0),
+                    }
     return out
 
 

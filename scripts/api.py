@@ -88,7 +88,8 @@ def local_status():
     }
 
 
-def local_buy(token_id: str, usd: float = None, amount: float = None, actor: str = "human", note: str = ""):
+def local_buy(token_id: str, usd: float = None, amount: float = None, actor: str = "human", note: str = "",
+              exceptional: bool = False):
     prices = fetch_all_token_prices()
     info = prices.get(token_id)
     if not info or info.get("price") is None:
@@ -104,6 +105,13 @@ def local_buy(token_id: str, usd: float = None, amount: float = None, actor: str
     else:
         raise ValueError("Must specify --usd or --amount")
 
+    # Risk rules (data/risk.json) for hand-picked tokens. exceptional=True allows
+    # the larger max position size; it is recorded in the activity log.
+    from risk import check_buy
+    check_buy(token_id, usd_value, exceptional=exceptional)
+    if exceptional:
+        note = (note + " " if note else "") + "[exceptional size]"
+
     # Fund the paper account for this buy
     p = load_portfolio()
     p["cash_usd"] = p.get("cash_usd", 0) + usd_value
@@ -115,7 +123,8 @@ def local_buy(token_id: str, usd: float = None, amount: float = None, actor: str
     return trade
 
 
-def local_sell(token_id: str, pct: float = None, usd: float = None, amount: float = None, actor: str = "human", note: str = ""):
+def local_sell(token_id: str, pct: float = None, usd: float = None, amount: float = None, actor: str = "human", note: str = "",
+               force: bool = False):
     prices = fetch_all_token_prices()
     info = prices.get(token_id)
     if not info or info.get("price") is None:
@@ -138,6 +147,14 @@ def local_sell(token_id: str, pct: float = None, usd: float = None, amount: floa
 
     if amount_to_sell > h["amount"]:
         raise RuntimeError(f"Insufficient balance: have {h['amount']}, want to sell {amount_to_sell}")
+
+    # Hold-until-break-even rule on re-entry positions. force=True overrides it;
+    # the override is recorded in the trade note and activity log.
+    if force:
+        note = (note + " " if note else "") + "[forced: hold-until-break-even overridden]"
+    else:
+        from risk import check_sell
+        check_sell(token_id, price)
 
     trade = record_trade("SELL", token_id, amount_to_sell, price, note=note or f"API sell by {actor}: {amount_to_sell:.6f} of {token_id}")
     log_event(actor, "sell", f"{actor} sold {amount_to_sell:.6f} {trade['ticker']} @ ${price:.6g} (${amount_to_sell * price:.2f})",
@@ -269,7 +286,8 @@ def remote_refresh(token: str, repo: str) -> dict:
     return _gh_dispatch_workflow(token, repo)
 
 
-def remote_buy(token_id: str, usd: float = None, amount: float = None, actor: str = "ai", note: str = "", gh_token: str = None, repo: str = None):
+def remote_buy(token_id: str, usd: float = None, amount: float = None, actor: str = "ai", note: str = "", gh_token: str = None, repo: str = None,
+               exceptional: bool = False):
     """
     Add a paper buy via the GitHub API.
 
@@ -320,6 +338,12 @@ def remote_buy(token_id: str, usd: float = None, amount: float = None, actor: st
         else:
             raise ValueError("Must specify --usd or --amount")
 
+        # Risk rules for hand-picked tokens (same as local_buy)
+        from risk import check_buy
+        check_buy(token_id, usd_value, exceptional=exceptional)
+        if exceptional:
+            note = (note + " " if note else "") + "[exceptional size]"
+
         # Fund + record
         p = load_portfolio()
         p["cash_usd"] = p.get("cash_usd", 0) + usd_value
@@ -355,6 +379,8 @@ def main():
     p_buy.add_argument("--amount", type=float)
     p_buy.add_argument("--actor", default="human", help="Who is making this buy (zAI, gAi, human, etc.)")
     p_buy.add_argument("--note", default="")
+    p_buy.add_argument("--exceptional", action="store_true",
+                       help="Exceptional setup: allows the larger max position size from data/risk.json")
 
     p_sell = sub.add_parser("sell", help="Sell a token")
     p_sell.add_argument("token_id")
@@ -363,6 +389,8 @@ def main():
     p_sell.add_argument("--amount", type=float)
     p_sell.add_argument("--actor", default="human")
     p_sell.add_argument("--note", default="")
+    p_sell.add_argument("--force", action="store_true",
+                        help="Override the hold-until-break-even rule on a re-entry position")
 
     p_refresh = sub.add_parser("refresh", help="Fetch fresh prices and update portfolio")
     p_rule = sub.add_parser("rule", help="Manage automated trading rules")
@@ -401,16 +429,19 @@ def main():
 
     elif args.cmd == "buy":
         if args.remote:
-            result = remote_buy(args.token_id, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note, gh_token=gh_token, repo=gh_repo)
+            result = remote_buy(args.token_id, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note, gh_token=gh_token, repo=gh_repo,
+                                exceptional=args.exceptional)
         else:
-            result = local_buy(args.token_id, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note)
+            result = local_buy(args.token_id, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note,
+                               exceptional=args.exceptional)
         print(json.dumps(result, indent=2, default=str))
 
     elif args.cmd == "sell":
         if args.remote:
             print("Remote sell not yet implemented — use local mode or trigger via workflow", file=sys.stderr)
             sys.exit(1)
-        result = local_sell(args.token_id, pct=args.pct, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note)
+        result = local_sell(args.token_id, pct=args.pct, usd=args.usd, amount=args.amount, actor=args.actor, note=args.note,
+                            force=args.force)
         print(json.dumps(result, indent=2, default=str))
 
     elif args.cmd == "refresh":

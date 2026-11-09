@@ -15,7 +15,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import TOKENS, INITIAL_BUY_USD
+from config import TOKENS as ALL_TOKENS, INITIAL_BUY_USD
+
+# Custom tokens (added by contract address) are bought by hand, never by init.
+TOKENS = [t for t in ALL_TOKENS if not t.get("custom")]
 from fetch_prices import fetch_all_token_prices
 from portfolio import (
     load_portfolio, empty_portfolio, save_portfolio,
