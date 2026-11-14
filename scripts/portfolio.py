@@ -228,10 +228,26 @@ def update_prices(prices_by_token: dict) -> None:
 
     history = load_price_history()
     history.append(snapshot)
-    # Cap history at 10000 entries to prevent file bloat
-    if len(history) > 10000:
-        history = history[-10000:]
-    save_price_history(history)
+    save_price_history(compact_history(history))
+
+
+def compact_history(history: list, now_epoch_s: int = None) -> list:
+    """Keep the chart useful without letting the file (downloaded by the
+    dashboard on every load) grow forever: every snapshot of the last 7 days,
+    one per hour up to 90 days, then one per day. Keeps the first snapshot of
+    each bucket, so the very first point (initial buy) is never dropped."""
+    now_epoch_s = now_epoch_s or now_epoch()
+    out, seen = [], set()
+    for snap in history:
+        age = now_epoch_s - snap.get("epoch", now_epoch_s)
+        if age <= 7 * 86400:
+            out.append(snap)
+            continue
+        bucket = ("h", snap["epoch"] // 3600) if age <= 90 * 86400 else ("d", snap["epoch"] // 86400)
+        if bucket not in seen:
+            seen.add(bucket)
+            out.append(snap)
+    return out
 
 
 def compute_summary() -> dict:

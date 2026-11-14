@@ -304,3 +304,13 @@ GitHub → **Actions** tab → **Paper trade** → **Run workflow**, then pick:
 The output appears in the run's **Summary**. Trades are committed to `data/`
 and show up on the dashboard ("My trades — risk rules" panel). Inputs are
 validated by `scripts/run_action.py` and never pasted into a shell command.
+
+## ✅ Tests
+
+```bash
+python tests/run_all.py
+```
+
+Offline suite (backtest simulator, full risk-rule scenario, safety re-check),
+run on a throwaway copy of the repo so real data is never touched. It also runs
+on GitHub (workflow "Tests") on every change to `scripts/` or `tests/`.

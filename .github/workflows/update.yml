@@ -26,20 +26,16 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # Use the auto-provided GITHUB_TOKEN so we can push back
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Standard library only (requirements.txt is empty): no pip install step.
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
       - name: Update portfolio
         id: update
