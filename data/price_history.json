@@ -348,19 +348,6 @@
     "portfolio_value_usd": 9.4849
   },
   {
-    "ts": "2026-08-21T21:27:55Z",
-    "epoch": 1787347675,
-    "prices": {
-      "tendies": 0.01314125,
-      "cashcat": 0.13115,
-      "fox": 0.00166756,
-      "pump": 0.0040296,
-      "lista": 0.074874,
-      "xvs": 3.21
-    },
-    "portfolio_value_usd": 9.60682
-  },
-  {
     "ts": "2026-08-21T22:27:54Z",
     "epoch": 1787351274,
     "prices": {
@@ -10447,5 +10434,18 @@
       "xvs": 2.3
     },
     "portfolio_value_usd": 10.706696
+  },
+  {
+    "ts": "2026-11-19T22:25:04Z",
+    "epoch": 1795127104,
+    "prices": {
+      "tendies": 0.00328692,
+      "cashcat": 0.04152247,
+      "fox": 5.428e-05,
+      "pump": 0.00263075,
+      "lista": 0.070319,
+      "xvs": 2.3
+    },
+    "portfolio_value_usd": 10.712605
   }
 ]
