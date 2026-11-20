@@ -2,25 +2,6 @@
   {
     "ts": "2026-08-19T01:39:14Z",
     "epoch": 1787103554,
-    "actor": "zAI",
-    "action": "rule_triggered",
-    "details": "Rule 'tp-zai-basket-2x' triggered: take_profit on FOX at +107.63% P&L \u2192 sell_50pct",
-    "data": {
-      "rule_id": "tp-zai-basket-2x",
-      "rule_type": "take_profit",
-      "token_id": "fox",
-      "ticker": "FOX",
-      "pnl_pct_at_trigger": 107.63147627861952,
-      "threshold": 100,
-      "action": "sell_50pct",
-      "trade_id": "4bf99d59-72eb-4079-aca4-d585ea9e2a3e",
-      "amount_sold": 545.902346925,
-      "price_usd": 0.0020919
-    }
-  },
-  {
-    "ts": "2026-08-19T01:39:14Z",
-    "epoch": 1787103554,
     "actor": "system",
     "action": "rule_error",
     "details": "Failed to execute rule 'tp-gai-basket-2x' on FOX: Insufficient balance: have 545.90234692, want to sell 545.902346925",
@@ -14037,6 +14018,20 @@
       "rules_triggered": 0,
       "portfolio_value": 10.701451670940502,
       "pnl_pct": 75.43363394984434
+    }
+  },
+  {
+    "ts": "2026-11-20T05:47:33Z",
+    "epoch": 1795153653,
+    "actor": "cron",
+    "action": "refresh",
+    "details": "Hourly refresh: 6/6 prices fetched, 0 rule(s) triggered. P&L: $4.63 (+75.82%)",
+    "data": {
+      "fetched": 6,
+      "total": 6,
+      "rules_triggered": 0,
+      "portfolio_value": 10.7250297252475,
+      "pnl_pct": 75.82015943028692
     }
   }
 ]
