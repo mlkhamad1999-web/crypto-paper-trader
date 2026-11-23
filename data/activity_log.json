@@ -2,25 +2,6 @@
   {
     "ts": "2026-08-20T22:30:56Z",
     "epoch": 1787265056,
-    "actor": "zAI",
-    "action": "rule_triggered",
-    "details": "Rule 'tp-zai-basket-2x' triggered: take_profit on PUMP at +101.21% P&L \u2192 sell_50pct",
-    "data": {
-      "rule_id": "tp-zai-basket-2x",
-      "rule_type": "take_profit",
-      "token_id": "pump",
-      "ticker": "PUMP",
-      "pnl_pct_at_trigger": 101.210085820043,
-      "threshold": 100,
-      "action": "sell_50pct",
-      "trade_id": "20fc675f-7110-424f-8662-1d65cb559a93",
-      "amount_sold": 133.269364035,
-      "price_usd": 0.0037745
-    }
-  },
-  {
-    "ts": "2026-08-20T22:30:56Z",
-    "epoch": 1787265056,
     "actor": "system",
     "action": "rule_error",
     "details": "Failed to execute rule 'tp-gai-basket-2x' on PUMP: Insufficient balance: have 133.26936403, want to sell 133.269364035",
@@ -14033,6 +14014,20 @@
       "rules_triggered": 0,
       "portfolio_value": 10.924067270669749,
       "pnl_pct": 79.08307001097953
+    }
+  },
+  {
+    "ts": "2026-11-23T11:38:12Z",
+    "epoch": 1795433892,
+    "actor": "cron",
+    "action": "refresh",
+    "details": "Hourly refresh: 6/6 prices fetched, 0 rule(s) triggered. P&L: $4.79 (+78.54%)",
+    "data": {
+      "fetched": 6,
+      "total": 6,
+      "rules_triggered": 0,
+      "portfolio_value": 10.890829781327751,
+      "pnl_pct": 78.53819313652055
     }
   }
 ]
