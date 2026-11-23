@@ -2,17 +2,6 @@
   {
     "ts": "2026-08-20T22:56:33Z",
     "epoch": 1787266593,
-    "actor": "system",
-    "action": "rule_error",
-    "details": "Failed to execute rule 'tp-gai-basket-2x' on PUMP: Insufficient balance: have 66.63468201, want to sell 66.634682015",
-    "data": {
-      "rule_id": "tp-gai-basket-2x",
-      "error": "Insufficient balance: have 66.63468201, want to sell 66.634682015"
-    }
-  },
-  {
-    "ts": "2026-08-20T22:56:33Z",
-    "epoch": 1787266593,
     "actor": "cron",
     "action": "refresh",
     "details": "Hourly refresh: 6/6 prices fetched, 1 rule(s) triggered. P&L: $5.88 (+159.87%)",
@@ -14026,6 +14015,20 @@
       "rules_triggered": 0,
       "portfolio_value": 11.0761406792485,
       "pnl_pct": 81.57607670899183
+    }
+  },
+  {
+    "ts": "2026-11-23T16:30:24Z",
+    "epoch": 1795451424,
+    "actor": "cron",
+    "action": "refresh",
+    "details": "Hourly refresh: 6/6 prices fetched, 0 rule(s) triggered. P&L: $5.06 (+83.02%)",
+    "data": {
+      "fetched": 6,
+      "total": 6,
+      "rules_triggered": 0,
+      "portfolio_value": 11.1640232660815,
+      "pnl_pct": 83.01677485379513
     }
   }
 ]
