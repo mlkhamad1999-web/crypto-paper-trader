@@ -2,25 +2,6 @@
   {
     "ts": "2026-08-20T23:28:05Z",
     "epoch": 1787268485,
-    "actor": "gAi",
-    "action": "rule_triggered",
-    "details": "Rule 'tp-gai-basket-2x' triggered: take_profit on PUMP at +107.22% P&L \u2192 sell_50pct",
-    "data": {
-      "rule_id": "tp-gai-basket-2x",
-      "rule_type": "take_profit",
-      "token_id": "pump",
-      "ticker": "PUMP",
-      "pnl_pct_at_trigger": 107.21680257250546,
-      "threshold": 100,
-      "action": "sell_50pct",
-      "trade_id": "14285659-2799-4f05-a820-7a3143820091",
-      "amount_sold": 33.317341005,
-      "price_usd": 0.00388718
-    }
-  },
-  {
-    "ts": "2026-08-20T23:28:05Z",
-    "epoch": 1787268485,
     "actor": "cron",
     "action": "refresh",
     "details": "Hourly refresh: 6/6 prices fetched, 2 rule(s) triggered. P&L: $6.02 (+169.64%)",
@@ -14024,6 +14005,20 @@
       "rules_triggered": 0,
       "portfolio_value": 11.08030932628675,
       "pnl_pct": 81.64441518502873
+    }
+  },
+  {
+    "ts": "2026-11-23T19:38:18Z",
+    "epoch": 1795462698,
+    "actor": "cron",
+    "action": "refresh",
+    "details": "Hourly refresh: 6/6 prices fetched, 0 rule(s) triggered. P&L: $4.95 (+81.13%)",
+    "data": {
+      "fetched": 6,
+      "total": 6,
+      "rules_triggered": 0,
+      "portfolio_value": 11.0489188978755,
+      "pnl_pct": 81.12981799795907
     }
   }
 ]
