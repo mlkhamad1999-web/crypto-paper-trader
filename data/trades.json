@@ -278,5 +278,20 @@
     "price_usd": 0.03520168,
     "value_usd": 0.564,
     "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +125.60% \u2192 sell_50pct)"
+  },
+  {
+    "id": "45bc8a4e-6a1c-494d-b5ba-79692f95faa5",
+    "ts": "2026-11-24T00:35:50Z",
+    "epoch": 1795480550,
+    "action": "SELL",
+    "token_id": "lista",
+    "ticker": "LISTA",
+    "chain": "BSC",
+    "recommended_by": "gAi",
+    "amount": 10.552664125,
+    "price_usd": 0.096344,
+    "value_usd": 1.016686,
+    "note": "Auto: rule 'tp-gai-basket-2x' triggered (take_profit @ +103.34% \u2192 sell_50pct)",
+    "realized_pnl_usd": 0.516686
   }
 ]

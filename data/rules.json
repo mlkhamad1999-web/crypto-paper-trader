@@ -27,6 +27,9 @@
     "threshold": 100,
     "action": "sell_50pct",
     "created_by": "gAi",
-    "note": "Take 50% profit on any gAi pick that 2x's"
+    "note": "Take 50% profit on any gAi pick that 2x's",
+    "fired": {
+      "lista": "initial"
+    }
   }
 ]
